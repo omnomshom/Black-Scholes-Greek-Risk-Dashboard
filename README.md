@@ -17,7 +17,7 @@ Visualization - Plotly
 
 
 # Installation and Setup 
-1. Clone the repository:
+1. **Clone the repository:**
    ```bash
    git clone https://github.com/omnomshom/Black-Scholes-Greek-Risk-Dashboard.git
    cd Black-Scholes-Greek-Risk-Dashboard
