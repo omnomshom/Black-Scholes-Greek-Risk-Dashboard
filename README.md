@@ -30,11 +30,11 @@ Visualization - Plotly
    ```bash
    streamlit run Main.py
 
-## Usage Guide
+# Usage Guide 
 
 1. Sidebar Parameters - Configure your option specifications including option Type (Call/Put), underlying Stock Price, strike price, time to expiry, risk-free rate, and volatility.
 2. Diagnostics Banner - Review automated safety warnings regarding gamma pinning or charm decay.
 3. Dashboards & Tabs
-   > Heatmaps / 3D Surfaces - explore visual exposure profiles across parameter space.
-   > Cross-Sectional Slices - analyse localized sensitivity gradients.
-   > Raw Data Export - download complete computed matrix grids as CSV files.
+   - Heatmaps / 3D Surfaces - explore visual exposure profiles across parameter space.
+   - Cross-Sectional Slices - analyse localized sensitivity gradients.
+   - Raw Data Export - download complete computed matrix grids as CSV files.
