@@ -1,6 +1,7 @@
 # Black Scholes Greek Risk Dashboard
 A Black-Scholes option Greeks and dashboard suite built with Python and Streamlit. Features real-time parameter sliders, 2D heatmaps, 3D interactive surfaces, cross-sectional sensitivity slices, and automated pin-risk diagnostics.
 
+
 # Features 
 Advanced Greek Calculations - Computes full 1st-order (Delta, Gamma, Theta, Vega, Rho), 2nd-order (Vanna, Vomma), and 3rd-order (Charm, Speed, Zomma) Greeks.
 Pin-Risk & Stress-Test Diagnostics - Automated alert engine that flags critical gamma pin risks, charm drift, and volatility acceleration thresholds.
@@ -13,6 +14,7 @@ Web Framework - Streamlit
 Numerical Computing - NumPy, SciPy 
 Data Manipulation - Pandas
 Visualization - Plotly
+
 
 # Installation and Setup 
 1. Clone the repository:
@@ -30,6 +32,7 @@ Visualization - Plotly
    ```bash
    streamlit run Main.py
 
+
 # Usage Guide 
 
 1. Sidebar Parameters - Configure your option specifications including option Type (Call/Put), underlying Stock Price, strike price, time to expiry, risk-free rate, and volatility.
@@ -38,3 +41,15 @@ Visualization - Plotly
    - Heatmaps / 3D Surfaces - explore visual exposure profiles across parameter space.
    - Cross-Sectional Slices - analyse localized sensitivity gradients.
    - Raw Data Export - download complete computed matrix grids as CSV files.
+
+
+# Ouputs
+<img width="1388" height="717" alt="image" src="https://github.com/user-attachments/assets/6788507f-34fd-4b38-bc5f-ccd4ca312904" />
+<img width="1367" height="587" alt="image" src="https://github.com/user-attachments/assets/3aeec915-a371-4ad7-bd8f-2934ee5adc1e" />
+<img width="1371" height="658" alt="image" src="https://github.com/user-attachments/assets/672a9522-87ff-4233-8302-2f0e3a7d94ce" />
+<img width="1346" height="801" alt="image" src="https://github.com/user-attachments/assets/6d6d3fe4-12ae-4247-95f4-aaa9a75f74d7" />
+<img width="1380" height="787" alt="image" src="https://github.com/user-attachments/assets/a41e8268-fbdc-4dd3-9d56-e09a8c9977e5" />
+
+
+
+
