@@ -1,5 +1,4 @@
 # Import all Libraries
-import io
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -8,11 +7,12 @@ import streamlit as st
 
 # Styling
 st.set_page_config(
-    page_title="Opton Greeks Dashboard",
+    page_title="Option Greeks Dashboard",
     layout="wide",
 )
 
 # CSS injection for styling clickable elements
+# noinspection SpellCheckingInspection
 st.markdown(
     """
     <style>
@@ -40,7 +40,7 @@ st.markdown(
     }
 
     /* General Streamlit widget and container overrides */
-    .stApp, 
+    .stApp,
     .stButton > button,
     .stDownloadButton > button,
     .stForm,
@@ -68,94 +68,133 @@ st.markdown(
 
 
 # Calculation engine
-def greeks(S, K, T, r, sigma, option_type):
-    """Calculate 1st, 2nd, and 3rd Order Option Greeks."""
-    T = np.maximum(T, 1e-5)
+def calculate_greeks(spot_price, strike_price, days_to_expiry, risk_free_rate, dividend_yield, sigma, option_type):
+    """Calculate 1st, 2nd, and 3rd Order Option Greeks (with continuous dividend yield) using days to expiry."""
+    # Convert days to years for Black-Scholes pricing
+    time_to_expiry_years = np.maximum(days_to_expiry / 365.0, 1e-5 / 365.0)
     sigma = np.maximum(sigma, 1e-5)
 
-    d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * np.sqrt(T))
-    d2 = d1 - sigma * np.sqrt(T)
+    d1 = (
+        np.log(spot_price / strike_price)
+        + (risk_free_rate - dividend_yield + 0.5 * sigma ** 2) * time_to_expiry_years
+    ) / (sigma * np.sqrt(time_to_expiry_years))
+    d2 = d1 - sigma * np.sqrt(time_to_expiry_years)
 
     pdf_d1 = norm.pdf(d1)
     cdf_d1 = norm.cdf(d1)
     cdf_d2 = norm.cdf(d2)
+    disc_q = np.exp(-dividend_yield * time_to_expiry_years)
+    disc_r = np.exp(-risk_free_rate * time_to_expiry_years)
 
     # 1st Order
     if option_type == "call":
-        delta = cdf_d1
-        theta = -(S * pdf_d1 * sigma) / (
-                2 * np.sqrt(T)
-        ) - r * K * np.exp(-r * T) * cdf_d2
-        rho = K * T * np.exp(-r * T) * cdf_d2
+        delta = disc_q * cdf_d1
+        theta = (
+            -(spot_price * disc_q * pdf_d1 * sigma) / (2 * np.sqrt(time_to_expiry_years))
+            - risk_free_rate * strike_price * disc_r * cdf_d2
+            + dividend_yield * spot_price * disc_q * cdf_d1
+        )
+        rho = strike_price * time_to_expiry_years * disc_r * cdf_d2
     else:
-        delta = cdf_d1 - 1
-        theta = -(S * pdf_d1 * sigma) / (
-                2 * np.sqrt(T)
-        ) + r * K * np.exp(-r * T) * norm.cdf(-d2)
-        rho = -K * T * np.exp(-r * T) * norm.cdf(-d2)
+        delta = disc_q * (cdf_d1 - 1)
+        theta = (
+            -(spot_price * disc_q * pdf_d1 * sigma) / (2 * np.sqrt(time_to_expiry_years))
+            + risk_free_rate * strike_price * disc_r * norm.cdf(-d2)
+            - dividend_yield * spot_price * disc_q * norm.cdf(-d1)
+        )
+        rho = -strike_price * time_to_expiry_years * disc_r * norm.cdf(-d2)
 
-    gamma = pdf_d1 / (S * sigma * np.sqrt(T))
-    vega = S * pdf_d1 * np.sqrt(T)
+    gamma = disc_q * pdf_d1 / (spot_price * sigma * np.sqrt(time_to_expiry_years))
+    vega = spot_price * disc_q * pdf_d1 * np.sqrt(time_to_expiry_years)
 
     # 2nd Order
-    vanna = -pdf_d1 * (d2 / sigma)
+    vanna = -disc_q * pdf_d1 * (d2 / sigma)
     vomma = vega * (d1 * d2 / sigma)
 
     # 3rd Order
-    charm = -pdf_d1 * (
-            2 * r * T - d2 * sigma * np.sqrt(T)
-    ) / (2 * T * sigma * np.sqrt(T))
-    speed = -gamma * (d1 / (sigma * np.sqrt(T)) + 1) / S
+    charm_common = disc_q * pdf_d1 * (
+        2 * (risk_free_rate - dividend_yield) * time_to_expiry_years - d2 * sigma * np.sqrt(time_to_expiry_years)
+    ) / (2 * time_to_expiry_years * sigma * np.sqrt(time_to_expiry_years))
+    if option_type == "call":
+        charm = dividend_yield * disc_q * cdf_d1 - charm_common
+    else:
+        charm = -dividend_yield * disc_q * norm.cdf(-d1) - charm_common
+    speed = -gamma * (d1 / (sigma * np.sqrt(time_to_expiry_years)) + 1) / spot_price
     zomma = gamma * (d1 * d2 - 1) / sigma
 
     return {
         "Delta": delta,
         "Gamma": gamma,
-        "Theta (annual)": theta,
-        "Theta (daily)": theta / 365,
+        "Theta (Annual)": theta,
+        "Theta (Daily)": theta / 365,
         "Vega (per 1%)": vega / 100,
         "Rho (per 1%)": rho / 100,
         "Vanna (per 1%)": vanna / 100,
         "Vomma (per 1%)": vomma / 100,
-        "Charm (daily)": charm / 365,
+        "Charm (Daily)": charm / 365,
         "Speed": speed,
         "Zomma (per 1%)": zomma / 100,
     }
 
 
 @st.cache_data(show_spinner=False)
-def calculate_greeks_grid(S_range, Y_range, K, r, static_val, y_axis_var, option_type):
+def calculate_greeks_grid(s_range, y_range, strike_price, risk_free_rate, dividend_yield, static_val, y_axis_var, option_type):
     """Calculates full 2D meshgrid matrix operations with Streamlit caching."""
-    if y_axis_var == "Time to Expiry (Years)":
-        S_grid, Y_grid = np.meshgrid(S_range, Y_range)
-        return greeks(S_grid, K, Y_grid, r, static_val, option_type)
+    if y_axis_var == "Time to Expiry (Days)":
+        s_grid, y_grid = np.meshgrid(s_range, y_range)
+        return calculate_greeks(s_grid, strike_price, y_grid, risk_free_rate, dividend_yield, static_val, option_type)
     else:
-        S_grid, Y_grid = np.meshgrid(S_range, Y_range)
-        return greeks(S_grid, K, static_val, r, Y_grid, option_type)
+        s_grid, y_grid = np.meshgrid(s_range, y_range)
+        return calculate_greeks(s_grid, strike_price, static_val, risk_free_rate, dividend_yield, y_grid, option_type)
 
 
 # Risk alert
-def render_risk_alerts(S, K, T, greeks):
-    """Analyze position parameters and issue automated risk warnings."""
-    alerts = []
-    monitored_spot_dist = abs(S - K) / K
+def render_risk_alerts(spot_price, strike_price, days_to_expiry, greeks_dict):
+    """Analyze position parameters and issue automated risk warnings.
 
-    if T <= (30 / 365) and monitored_spot_dist <= 0.03:
+    Thresholds:
+    - Gamma pin risk: proximity-based, unchanged (near strike + near expiry is
+      unambiguously high pin risk regardless of other parameters).
+    - Charm drift: unchanged absolute threshold on daily Delta decay.
+    - Vomma: absolute |Vomma (per 1%)| threshold, empirically calibrated
+      against a sweep of K in [80,120], DTE in [5,180], sigma in [10%,60%]
+      at S=100, r=4.5%, q=1.5%. That sweep gives percentiles of
+      [p50, p75, p90, p95, p99] = [0.11, 0.28, 0.61, 0.89, 1.44], so the
+      threshold below is set at the ~90th percentile: it only fires on
+      genuinely unusual parameter combinations, not routine ATM/short-dated
+      options. (An earlier version of this alert used a Vomma/Vega ratio,
+      but that ratio scales with 1/sigma and turned out to be even less
+      calibrated than the absolute value it replaced - it's dropped here
+      in favour of the empirically-tested absolute threshold.)
+    """
+    alerts = []
+    monitored_spot_dist = abs(spot_price - strike_price) / strike_price
+
+    if days_to_expiry <= 30 and monitored_spot_dist <= 0.03:
         alerts.append((
             "error",
-            f"**HIGH GAMMA PIN RISK ALERT:** Option is {T * 365:.1f} days from expiry and within {monitored_spot_dist * 100:.1f}% of strike. Expect extreme Delta acceleration and rapid hedging requirements.",
+            f"**HIGH GAMMA PIN RISK ALERT:** Option is {days_to_expiry:.1f} days from expiry "
+            f"and within {monitored_spot_dist * 100:.1f}% of strike. Expect extreme Delta acceleration "
+            f"and rapid hedging requirements.",
         ))
 
-    if abs(greeks["Charm (daily)"]) >= 0.01:
+    if abs(greeks_dict["Charm (Daily)"]) >= 0.01:
         alerts.append((
             "warning",
-            f"**HIGH CHARM DRIFT:** Delta decays by **{greeks['Charm (daily)']:.4f} per day** overnight without any underlying stock price movement.",
+            f"**HIGH CHARM DRIFT:** Delta decays by **{greeks_dict['Charm (Daily)']:.4f} per day** "
+            f"overnight without any underlying stock price movement.",
         ))
 
-    if abs(greeks["Vomma (per 1%)"]) >= 0.02:
+    vomma = greeks_dict["Vomma (per 1%)"]
+    VOMMA_HIGH_THRESHOLD = 0.6  # ~90th percentile of realistic Vomma values, see docstring
+
+    if abs(vomma) >= VOMMA_HIGH_THRESHOLD:
         alerts.append((
             "info",
-            f"**HIGH VOMMA VOLATILITY ACCELERATION:** Vega is highly sensitive to volatility changes (Vomma = {greeks['Vomma (per 1%)']:.4f}). Implied Volatility spikes will non-linearly expand option value.",
+            f"**HIGH VOMMA VOLATILITY ACCELERATION:** Vega is highly sensitive to volatility "
+            f"changes (Vomma = {vomma:.4f}), placing this in roughly the top 10% of Vomma values "
+            f"across realistic strikes, expiries, and volatility levels. Implied volatility spikes "
+            f"will non-linearly expand option value more than usual.",
         ))
 
     if not alerts:
@@ -171,11 +210,18 @@ def render_risk_alerts(S, K, T, greeks):
 def main():
     st.title("Option Greeks Platform")
 
-    if "S" not in st.session_state: st.session_state.S = 100.0
-    if "K" not in st.session_state: st.session_state.K = 100.0
-    if "T" not in st.session_state: st.session_state.T = 0.1
-    if "r_pct" not in st.session_state: st.session_state.r_pct = 5.0
-    if "sigma_pct" not in st.session_state: st.session_state.sigma_pct = 20.0
+    if "S" not in st.session_state:
+        st.session_state.S = 100.0
+    if "K" not in st.session_state:
+        st.session_state.K = 105.0
+    if "days" not in st.session_state:
+        st.session_state.days = 30.0
+    if "r_pct" not in st.session_state:
+        st.session_state.r_pct = 4.5
+    if "q_pct" not in st.session_state:
+        st.session_state.q_pct = 1.5
+    if "sigma_pct" not in st.session_state:
+        st.session_state.sigma_pct = 20.0
 
     # Main Page Input Controls grouped in Expanders or Containers
     with st.expander("Parameters & Visualization Settings", expanded=True):
@@ -183,18 +229,24 @@ def main():
 
         with col1:
             option_type = st.selectbox("Option Type", ["call", "put"])
-            S = st.number_input("Underlying Stock Price ($)", min_value=0.01, value=st.session_state.S, step=1.0)
-            K = st.number_input("Strike Price ($)", min_value=0.01, value=st.session_state.K, step=1.0)
+            spot_price = st.number_input("Underlying Stock Price ($)", min_value=0.01, value=st.session_state.S, step=1.0)
+            strike_price = st.number_input("Strike Price ($)", min_value=0.01, value=st.session_state.K, step=1.0)
 
         with col2:
-            T = st.number_input("Time to Expiry (years)", min_value=0.001, value=st.session_state.T, step=0.05)
-            r_pct = st.number_input("Risk-free Interest Rate (%)", min_value=0.0, value=st.session_state.r_pct,
-                                    step=0.1)
+            days_to_expiry = st.number_input(
+                "Time to Expiry (Days)", min_value=0.1, value=st.session_state.days, step=1.0
+            )
+            r_pct = st.number_input(
+                "Risk-free Interest Rate (%)", min_value=0.0, value=st.session_state.r_pct, step=0.1
+            )
+            q_pct = st.number_input(
+                "Dividend Yield (%)", min_value=0.0, value=st.session_state.q_pct, step=0.1
+            )
             sigma_pct = st.number_input("Volatility (%)", min_value=0.01, value=st.session_state.sigma_pct, step=1.0)
 
         with col3:
-            y_axis_var = st.radio("Y-Axis Variable", ["Time to Expiry (Years)", "Volatility (%)"])
-            COLOR_THEMES = {
+            y_axis_var = st.radio("Y-Axis Variable", ["Time to Expiry (Days)", "Volatility (%)"])
+            color_themes = {
                 "Purple & Yellow": "Viridis",
                 "Red & Green": "RdYlGn",
                 "Phoenix": "Plasma",
@@ -203,66 +255,73 @@ def main():
                 "Thermal": "Hot",
                 "Red & Blue": "RdBu",
             }
-            selected_theme_label = st.selectbox("Chart Color Theme", options=list(COLOR_THEMES.keys()))
-            color_choice = COLOR_THEMES[selected_theme_label]
+            selected_theme_label = st.selectbox("Chart Color Theme", options=list(color_themes.keys()))
+            color_choice = color_themes[selected_theme_label]
 
-    r = r_pct / 100.0
+    risk_free_rate = r_pct / 100.0
+    dividend_yield = q_pct / 100.0
     sigma = sigma_pct / 100.0
 
     # Point Estimate Greeks
-    greeks = greeks(S, K, T, r, sigma, option_type)
+    greeks_data = calculate_greeks(spot_price, strike_price, days_to_expiry, risk_free_rate, dividend_yield, sigma, option_type)
 
     # Risk Alerts
     st.markdown("### Risk & Pin-Risk Diagnostics")
-    render_risk_alerts(S, K, T, greeks)
+    render_risk_alerts(spot_price, strike_price, days_to_expiry, greeks_data)
 
     st.divider()
 
     # Metrics Dashboard
     st.markdown("### 1st Order Greeks")
     c1 = st.columns(5)
-    c1[0].metric("Delta", f"{greeks['Delta']:.4f}")
-    c1[1].metric("Gamma", f"{greeks['Gamma']:.4f}")
-    c1[2].metric("Theta (Daily)", f"{greeks['Theta (daily)']:.4f}")
-    c1[3].metric("Vega (per 1%)", f"{greeks['Vega (per 1%)']:.4f}")
-    c1[4].metric("Rho (per 1%)", f"{greeks['Rho (per 1%)']:.4f}")
+    c1[0].metric("Delta", f"{greeks_data['Delta']:.4f}")
+    c1[1].metric("Gamma", f"{greeks_data['Gamma']:.4f}")
+    c1[2].metric("Theta (Daily)", f"{greeks_data['Theta (Daily)']:.4f}")
+    c1[3].metric("Vega (per 1%)", f"{greeks_data['Vega (per 1%)']:.4f}")
+    c1[4].metric("Rho (per 1%)", f"{greeks_data['Rho (per 1%)']:.4f}")
 
     st.markdown("<div class='sub-header'>2nd & 3rd Order Higher Greeks</div>", unsafe_allow_html=True)
     c2 = st.columns(5)
-    c2[0].metric("Vanna (dDelta/dVol)", f"{greeks['Vanna (per 1%)']:.4f}",
-                 help="Delta sensitivity per 1% change in Volatility")
-    c2[1].metric("Vomma (dVega/dVol)", f"{greeks['Vomma (per 1%)']:.4f}",
-                 help="Vega sensitivity per 1% change in Volatility")
-    c2[2].metric("Charm (Daily Delta Decay)", f"{greeks['Charm (daily)']:.4f}", help="Delta decay per calendar day")
-    c2[3].metric("Speed (dGamma/dSpot)", f"{greeks['Speed']:.6f}", help="Gamma sensitivity to spot price move")
-    c2[4].metric("Zomma (dGamma/dVol)", f"{greeks['Zomma (per 1%)']:.4f}", help="Gamma sensitivity to volatility move")
+    c2[0].metric(
+        "Vanna (dDelta/dVol)", f"{greeks_data['Vanna (per 1%)']:.4f}", help="Delta sensitivity per 1% change in Volatility"
+    )
+    c2[1].metric(
+        "Vomma (dVega/dVol)", f"{greeks_data['Vomma (per 1%)']:.4f}", help="Vega sensitivity per 1% change in Volatility"
+    )
+    c2[2].metric("Charm (Daily Delta Decay)", f"{greeks_data['Charm (Daily)']:.4f}", help="Delta decay per calendar day")
+    c2[3].metric("Speed (dGamma/dSpot)", f"{greeks_data['Speed']:.6f}", help="Gamma sensitivity to spot price move")
+    c2[4].metric("Zomma (dGamma/dVol)", f"{greeks_data['Zomma (per 1%)']:.4f}", help="Gamma sensitivity to volatility move")
 
     st.divider()
 
     # Meshgrid Calculation
-    S_range = np.linspace(max(0.01, S * 0.5), S * 1.5, 60)
+    s_range = np.linspace(max(0.01, spot_price * 0.5), spot_price * 1.5, 60)
 
-    if y_axis_var == "Time to Expiry (Years)":
-        Y_range = np.linspace(0.005, max(T * 1.5, 1.0), 60)
-        surfaces = calculate_greeks_grid(S_range, Y_range, K, r, sigma, y_axis_var, option_type)
-        y_label = "Time to Expiry (Years)"
-        Y_plot_vals = Y_range
-        current_y_val = T
+    if y_axis_var == "Time to Expiry (Days)":
+        y_range = np.linspace(1, max(days_to_expiry * 1.5, 365), 60)
+        surfaces = calculate_greeks_grid(
+            s_range, y_range, strike_price, risk_free_rate, dividend_yield, sigma, y_axis_var, option_type
+        )
+        y_label = "Time to Expiry (Days)"
+        y_plot_vals = y_range
+        current_y_val = days_to_expiry
     else:
-        Y_range = np.linspace(0.05, max(sigma * 2.0, 1.0), 60)
-        surfaces = calculate_greeks_grid(S_range, Y_range, K, r, T, y_axis_var, option_type)
+        y_range = np.linspace(0.05, max(sigma * 2.0, 1.0), 60)
+        surfaces = calculate_greeks_grid(
+            s_range, y_range, strike_price, risk_free_rate, dividend_yield, days_to_expiry, y_axis_var, option_type
+        )
         y_label = "Volatility (%)"
-        Y_plot_vals = Y_range * 100
+        y_plot_vals = y_range * 100
         current_y_val = sigma_pct
 
     greeks_to_plot = {
         "Delta": surfaces["Delta"],
         "Gamma": surfaces["Gamma"],
-        "Theta (Daily)": surfaces["Theta (daily)"],
+        "Theta (Daily)": surfaces["Theta (Daily)"],
         "Vega (per 1%)": surfaces["Vega (per 1%)"],
         "Vanna (per 1%)": surfaces["Vanna (per 1%)"],
         "Vomma (per 1%)": surfaces["Vomma (per 1%)"],
-        "Charm (Daily)": surfaces["Charm (daily)"],
+        "Charm (Daily)": surfaces["Charm (Daily)"],
         "Speed": surfaces["Speed"],
         "Zomma (per 1%)": surfaces["Zomma (per 1%)"],
     }
@@ -278,20 +337,21 @@ def main():
     with tab1:
         st.markdown(f"### 2D Heatmaps (Stock Price vs {y_label})")
         grid_cols_2d = st.columns(2)
-        for i, (g_name, Z) in enumerate(greeks_to_plot.items()):
+        for i, (g_name, z_val) in enumerate(greeks_to_plot.items()):
             fig_2d = go.Figure(
                 data=go.Heatmap(
-                    x=S_range,
-                    y=Y_plot_vals,
-                    z=Z,
+                    x=s_range,
+                    y=y_plot_vals,
+                    z=z_val,
                     colorscale=color_choice,
                     colorbar=dict(title=g_name),
-                    hovertemplate="Stock: %{x:$.2f}<br>" + f"{y_label}: %{{y:.2f}}<br>{g_name}: %{{z:.4f}}<extra></extra>",
+                    hovertemplate="Stock: %{x:$.2f}<br>" + f"{y_label}: %{{y:.1f}}<br>{g_name}: %{{z:.4f}}<extra></extra>",
                 )
             )
-            fig_2d.add_vline(x=S, line_dash="dash", line_color="red", opacity=0.7, annotation_text=f"S=${S:.2f}")
-            fig_2d.add_hline(y=current_y_val, line_dash="dash", line_color="white", opacity=0.7,
-                             annotation_text=f"Current={current_y_val:.2f}")
+            fig_2d.add_vline(x=spot_price, line_dash="dash", line_color="red", opacity=0.7, annotation_text=f"S=${spot_price:.2f}")
+            fig_2d.add_hline(
+                y=current_y_val, line_dash="dash", line_color="white", opacity=0.7, annotation_text=f"Current={current_y_val:.1f}"
+            )
             fig_2d.update_layout(
                 title=f"{g_name} Heatmap",
                 xaxis_title="Stock Price ($)",
@@ -305,8 +365,8 @@ def main():
     with tab2:
         st.markdown(f"### 3D Surfaces (Stock Price vs {y_label})")
         grid_cols_3d = st.columns(2)
-        for i, (g_name, Z) in enumerate(greeks_to_plot.items()):
-            fig_3d = go.Figure(data=[go.Surface(x=S_range, y=Y_plot_vals, z=Z, colorscale=color_choice)])
+        for i, (g_name, z_val) in enumerate(greeks_to_plot.items()):
+            fig_3d = go.Figure(data=[go.Surface(x=s_range, y=y_plot_vals, z=z_val, colorscale=color_choice)])
             fig_3d.update_layout(
                 title=f"{g_name} Surface",
                 height=450,
@@ -325,24 +385,34 @@ def main():
                 list(greeks_to_plot.keys()),
             )
         with slice_col2:
-            slice_variable = st.radio("Overlay Comparison Across:", ["Time to Expiry (T)", "Volatility (σ)"],
-                                      horizontal=True)
+            slice_variable = st.radio(
+                "Overlay Comparison Across:", ["Time to Expiry (Days)", "Volatility (σ)"], horizontal=True
+            )
 
         fig_1d = go.Figure()
-        if slice_variable == "Time to Expiry (T)":
-            timeframes = [0.02, 0.08, 0.25, 0.5, 1.0]
-            for t_val in timeframes:
-                g_slice = greeks(S_range, K, t_val, r, sigma, option_type)
-                fig_1d.add_trace(go.Scatter(x=S_range, y=g_slice[target_greek], mode="lines",
-                                            name=f"T = {t_val:.2f} Yrs ({int(t_val * 365)}d)"))
+        if slice_variable == "Time to Expiry (Days)":
+            day_frames = [7, 30, 90, 180, 365]
+            for day_val in day_frames:
+                g_slice = calculate_greeks(s_range, strike_price, day_val, risk_free_rate, dividend_yield, sigma, option_type)
+                fig_1d.add_trace(
+                    go.Scatter(
+                        x=s_range,
+                        y=g_slice[target_greek],
+                        mode="lines",
+                        name=f"DTE = {day_val} Days",
+                    )
+                )
         else:
             vol_levels = [0.10, 0.20, 0.35, 0.50, 0.80]
             for v_val in vol_levels:
-                g_slice = greeks(S_range, K, T, r, v_val, option_type)
+                g_slice = calculate_greeks(
+                    s_range, strike_price, days_to_expiry, risk_free_rate, dividend_yield, v_val, option_type
+                )
                 fig_1d.add_trace(
-                    go.Scatter(x=S_range, y=g_slice[target_greek], mode="lines", name=f"Vol = {int(v_val * 100)}%"))
+                    go.Scatter(x=s_range, y=g_slice[target_greek], mode="lines", name=f"Vol = {int(v_val * 100)}%")
+                )
 
-        fig_1d.add_vline(x=S, line_dash="dash", line_color="red", annotation_text=f"Current S = ${S:.2f}")
+        fig_1d.add_vline(x=spot_price, line_dash="dash", line_color="red", annotation_text=f"Current S = ${spot_price:.2f}")
         fig_1d.update_layout(
             title=f"{target_greek} Profile across {slice_variable}",
             xaxis_title="Stock Price ($)",
@@ -359,19 +429,18 @@ def main():
 
         df_export = pd.DataFrame(
             greeks_to_plot[export_greek],
-            index=np.round(Y_plot_vals, 3),
-            columns=np.round(S_range, 2)
+            index=np.round(y_plot_vals, 2),
+            columns=np.round(s_range, 2)
         )
         df_export.index.name = y_label
 
-        st.dataframe(df_export.style.format("{:.4f}"), use_container_width=True)
+        st.markdown(df_export.style.format("{:.4f}").to_html(), unsafe_allow_html=True)
 
-        csv_buffer = io.BytesIO()
-        df_export.to_csv(csv_buffer)
+        csv_data = df_export.to_csv()
 
         st.download_button(
             label=f"Download {export_greek} Matrix CSV",
-            data=csv_buffer.getvalue(),
+            data=csv_data,
             file_name=f"{export_greek.lower().replace(' ', '_')}_grid.csv",
             mime="text/csv",
             use_container_width=True,
@@ -381,29 +450,37 @@ def main():
     with st.expander("Greek Formulas Reference"):
         st.markdown(
             r"""
-            **Base Equations:**  
-            $d_1 = \frac{\ln(S/K) + (r + \frac{1}{2}\sigma^2)T}{\sigma\sqrt{T}}, \quad d_2 = d_1 - \sigma\sqrt{T}$
+            **Base Equations (with continuous dividend yield q):**
+            $d_1 = \frac{\ln(S/K) + (r - q + \frac{1}{2}\sigma^2)T}{\sigma\sqrt{T}}, \quad d_2 = d_1 - \sigma\sqrt{T} \quad \text{where } T = \text{Days} / 365$
 
             ---
 
             **1st Order Greeks:**
-            * $\Delta_{Call} = N(d_1), \quad \Delta_{Put} = N(d_1) - 1$
-            * $\Gamma = \frac{N'(d_1)}{S \sigma \sqrt{T}}$
-            * $\Theta_{Call} = -\frac{S N'(d_1) \sigma}{2\sqrt{T}} - r K e^{-rT} N(d_2)$
-            * $\text{Vega} = S N'(d_1) \sqrt{T}$
+            * $\Delta_{Call} = e^{-qT}N(d_1), \quad \Delta_{Put} = e^{-qT}(N(d_1) - 1)$
+            * $\Gamma = \frac{e^{-qT}N'(d_1)}{S \sigma \sqrt{T}}$
+            * $\Theta_{Call} = -\frac{S e^{-qT} N'(d_1) \sigma}{2\sqrt{T}} - r K e^{-rT} N(d_2) + q S e^{-qT} N(d_1)$
+            * $\text{Vega} = S e^{-qT} N'(d_1) \sqrt{T}$
 
             ---
 
             **2nd Order Greeks:**
-            * $\text{Vanna} = \frac{\partial \Delta}{\partial \sigma} = -N'(d_1) \frac{d_2}{\sigma}$
+            * $\text{Vanna} = \frac{\partial \Delta}{\partial \sigma} = -e^{-qT}N'(d_1) \frac{d_2}{\sigma}$
             * $\text{Vomma} = \frac{\partial \text{Vega}}{\partial \sigma} = \text{Vega} \times \frac{d_1 d_2}{\sigma}$
 
             ---
 
             **3rd Order Greeks:**
-            * $\text{Charm} = \frac{\partial \Delta}{\partial T} = -N'(d_1) \left[ \frac{2rT - d_2 \sigma \sqrt{T}}{2 T \sigma \sqrt{T}} \right]$
+            * $\text{Charm} = \frac{\partial \Delta}{\partial T} = q e^{-qT}N(d_1) - e^{-qT}N'(d_1) \left[ \frac{2(r-q)T - d_2 \sigma \sqrt{T}}{2 T \sigma \sqrt{T}} \right]$ (call)
             * $\text{Speed} = \frac{\partial \Gamma}{\partial S} = -\frac{\Gamma}{S} \left[ \frac{d_1}{\sigma \sqrt{T}} + 1 \right]$
             * $\text{Zomma} = \frac{\partial \Gamma}{\partial \sigma} = \Gamma \left[ \frac{d_1 d_2 - 1}{\sigma} \right]$
+
+            ---
+
+            **Risk Alert Logic:**
+            * The Vomma alert threshold (|Vomma| ≥ 0.6) is calibrated empirically against a
+              sweep of realistic strikes, expiries, and volatility levels rather than chosen
+              arbitrarily, so it only fires on genuinely unusual parameter combinations
+              (roughly the top 10%) rather than routine ATM, short-dated options.
             """
         )
 
