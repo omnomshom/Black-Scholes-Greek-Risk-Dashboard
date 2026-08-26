@@ -3,11 +3,11 @@ A Black-Scholes option Greeks and dashboard suite built with Python and Streamli
 
 
 # Features 
-Advanced Greek Calculations - Computes full 1st-order (Delta, Gamma, Theta, Vega, Rho), 2nd-order (Vanna, Vomma), and 3rd-order (Charm, Speed, Zomma) Greeks.
-Pin-Risk & Stress-Test Diagnostics - Automated alert engine that flags critical gamma pin risks, charm drift, and volatility acceleration thresholds.
-Interactive Visualizations - Dynamic 2D heatmaps and 3D interactive surfaces rendered via Plotly.
-Cross-Sectional Slices - sensitivity curves across varying timeframes and volatility levels.
-Data Export - Instant matrix grid calculations and CSV export capabilities.
+Greek calculator and visualiser - computes and visualises 1st order (Delta, Gamma, Theta, Vega, Rho), 2nd order (Vanna, Vomma), and 3rd-order (Charm, Speed, Zomma) Greeks.
+Pin-risk and stress test diagnostics - automated alert engine that flags critical gamma pin risks, charm drift, and volatility acceleration thresholds.
+Interactive visualizations - dynamic heatmaps and interactive 3D surfaces rendered via Plotly.
+Cross-sectional slices - sensitivity curves across varying timeframes and volatility levels.
+Data export - instant matrix grid calculations and CSV export capabilities.
 
 Main Language - Python
 Web Framework - Streamlit
@@ -35,12 +35,12 @@ Visualization - Plotly
 
 # Usage Guide 
 
-1. Sidebar Parameters - Configure your option specifications including option Type (Call/Put), underlying Stock Price, strike price, time to expiry, risk-free rate, and volatility.
-2. Diagnostics Banner - Review automated safety warnings regarding gamma pinning or charm decay.
-3. Dashboards & Tabs
+1. Sidebar Parameters - configure your option specifications including option Type (Call/Put), underlying Stock Price, strike price, time to expiry, risk-free rate, and volatility.
+2. Diagnostics banner - review automated safety warnings regarding gamma pinning or charm decay.
+3. Dashboards and tabs
    - Heatmaps / 3D Surfaces - explore visual exposure profiles across parameter space.
-   - Cross-Sectional Slices - analyse localized sensitivity gradients.
-   - Raw Data Export - download complete computed matrix grids as CSV files.
+   - Cross-sectional slices - analyse localized sensitivity gradients.
+   - Raw data export - download complete computed matrix grids as CSV files.
 
 
 # Ouputs
