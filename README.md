@@ -1,5 +1,5 @@
-# Black Scholes Greek Risk Dashboard
-A Black-Scholes option Greeks and dashboard suite built with Python and Streamlit. Features variable parameters, 2D heatmaps, 3D interactive surfaces, cross-sectional sensitivity slices, and automated pin-risk diagnostics.
+# Option Greeks Risk Dashboard
+Option Greeks dashboard suite built with Python and Streamlit. Features variable parameters, 2D heatmaps, 3D interactive surfaces, cross-sectional sensitivity slices, and automated pin-risk diagnostics.
 
 
 # Features 
