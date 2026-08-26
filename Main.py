@@ -8,7 +8,7 @@ import streamlit as st
 
 # Styling
 st.set_page_config(
-    page_title="Black-Scholes Greek & Risk Dashboard",
+    page_title="Opton Greeks Dashboard",
     layout="wide",
 )
 
@@ -68,8 +68,8 @@ st.markdown(
 
 
 # Calculation engine
-def black_scholes_greeks(S, K, T, r, sigma, option_type):
-    """Calculate Black-Scholes 1st, 2nd, and 3rd Order Option Greeks."""
+def greeks(S, K, T, r, sigma, option_type):
+    """Calculate 1st, 2nd, and 3rd Order Option Greeks."""
     T = np.maximum(T, 1e-5)
     sigma = np.maximum(sigma, 1e-5)
 
@@ -128,10 +128,10 @@ def calculate_greeks_grid(S_range, Y_range, K, r, static_val, y_axis_var, option
     """Calculates full 2D meshgrid matrix operations with Streamlit caching."""
     if y_axis_var == "Time to Expiry (Years)":
         S_grid, Y_grid = np.meshgrid(S_range, Y_range)
-        return black_scholes_greeks(S_grid, K, Y_grid, r, static_val, option_type)
+        return greeks(S_grid, K, Y_grid, r, static_val, option_type)
     else:
         S_grid, Y_grid = np.meshgrid(S_range, Y_range)
-        return black_scholes_greeks(S_grid, K, static_val, r, Y_grid, option_type)
+        return greeks(S_grid, K, static_val, r, Y_grid, option_type)
 
 
 # Risk alert
@@ -169,7 +169,7 @@ def render_risk_alerts(S, K, T, greeks):
 
 # App layout
 def main():
-    st.title("Black-Scholes Greek & Risk Platform")
+    st.title("Option Greeks Platform")
 
     if "S" not in st.session_state: st.session_state.S = 100.0
     if "K" not in st.session_state: st.session_state.K = 100.0
@@ -210,7 +210,7 @@ def main():
     sigma = sigma_pct / 100.0
 
     # Point Estimate Greeks
-    greeks = black_scholes_greeks(S, K, T, r, sigma, option_type)
+    greeks = greeks(S, K, T, r, sigma, option_type)
 
     # Risk Alerts
     st.markdown("### Risk & Pin-Risk Diagnostics")
@@ -332,13 +332,13 @@ def main():
         if slice_variable == "Time to Expiry (T)":
             timeframes = [0.02, 0.08, 0.25, 0.5, 1.0]
             for t_val in timeframes:
-                g_slice = black_scholes_greeks(S_range, K, t_val, r, sigma, option_type)
+                g_slice = greeks(S_range, K, t_val, r, sigma, option_type)
                 fig_1d.add_trace(go.Scatter(x=S_range, y=g_slice[target_greek], mode="lines",
                                             name=f"T = {t_val:.2f} Yrs ({int(t_val * 365)}d)"))
         else:
             vol_levels = [0.10, 0.20, 0.35, 0.50, 0.80]
             for v_val in vol_levels:
-                g_slice = black_scholes_greeks(S_range, K, T, r, v_val, option_type)
+                g_slice = greeks(S_range, K, T, r, v_val, option_type)
                 fig_1d.add_trace(
                     go.Scatter(x=S_range, y=g_slice[target_greek], mode="lines", name=f"Vol = {int(v_val * 100)}%"))
 
