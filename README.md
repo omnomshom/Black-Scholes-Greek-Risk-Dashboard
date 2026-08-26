@@ -1,4 +1,4 @@
-# Option Greeks Risk Dashboard
+# Option Greeks Dashboard
 Option Greeks dashboard suite built with Python and Streamlit. Features variable parameters, 2D heatmaps, 3D interactive surfaces, cross-sectional sensitivity slices, and automated pin-risk diagnostics.
 
 
