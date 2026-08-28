@@ -150,23 +150,7 @@ def calculate_greeks_grid(s_range, y_range, strike_price, risk_free_rate, divide
 
 # Risk alert
 def render_risk_alerts(spot_price, strike_price, days_to_expiry, greeks_dict):
-    """Analyze position parameters and issue automated risk warnings.
-
-    Thresholds:
-    - Gamma pin risk: proximity-based, unchanged (near strike + near expiry is
-      unambiguously high pin risk regardless of other parameters).
-    - Charm drift: unchanged absolute threshold on daily Delta decay.
-    - Vomma: absolute |Vomma (per 1%)| threshold, empirically calibrated
-      against a sweep of K in [80,120], DTE in [5,180], sigma in [10%,60%]
-      at S=100, r=4.5%, q=1.5%. That sweep gives percentiles of
-      [p50, p75, p90, p95, p99] = [0.11, 0.28, 0.61, 0.89, 1.44], so the
-      threshold below is set at the ~90th percentile: it only fires on
-      genuinely unusual parameter combinations, not routine ATM/short-dated
-      options. (An earlier version of this alert used a Vomma/Vega ratio,
-      but that ratio scales with 1/sigma and turned out to be even less
-      calibrated than the absolute value it replaced - it's dropped here
-      in favour of the empirically-tested absolute threshold.)
-    """
+    """Analyze position parameters and issue automated risk warnings."""
     alerts = []
     monitored_spot_dist = abs(spot_price - strike_price) / strike_price
 
@@ -186,7 +170,7 @@ def render_risk_alerts(spot_price, strike_price, days_to_expiry, greeks_dict):
         ))
 
     vomma = greeks_dict["Vomma (per 1%)"]
-    VOMMA_HIGH_THRESHOLD = 0.6  # ~90th percentile of realistic Vomma values, see docstring
+    VOMMA_HIGH_THRESHOLD = 0.6
 
     if abs(vomma) >= VOMMA_HIGH_THRESHOLD:
         alerts.append((
@@ -273,24 +257,24 @@ def main():
 
     # Metrics Dashboard
     st.markdown("### 1st Order Greeks")
-    c1 = st.columns(5)
+    c1 = st.columns(4)
     c1[0].metric("Delta", f"{greeks_data['Delta']:.4f}")
-    c1[1].metric("Gamma", f"{greeks_data['Gamma']:.4f}")
-    c1[2].metric("Theta (Daily)", f"{greeks_data['Theta (Daily)']:.4f}")
-    c1[3].metric("Vega (per 1%)", f"{greeks_data['Vega (per 1%)']:.4f}")
-    c1[4].metric("Rho (per 1%)", f"{greeks_data['Rho (per 1%)']:.4f}")
+    c1[1].metric("Theta (Daily)", f"{greeks_data['Theta (Daily)']:.4f}")
+    c1[2].metric("Vega (per 1%)", f"{greeks_data['Vega (per 1%)']:.4f}")
+    c1[3].metric("Rho (per 1%)", f"{greeks_data['Rho (per 1%)']:.4f}")
 
     st.markdown("<div class='sub-header'>2nd & 3rd Order Higher Greeks</div>", unsafe_allow_html=True)
-    c2 = st.columns(5)
-    c2[0].metric(
+    c2 = st.columns(6)
+    c2[0].metric("Gamma (dDelta/dSpot)", f"{greeks_data['Gamma']:.4f}", help="Delta sensitivity to spot price move")
+    c2[1].metric(
         "Vanna (dDelta/dVol)", f"{greeks_data['Vanna (per 1%)']:.4f}", help="Delta sensitivity per 1% change in Volatility"
     )
-    c2[1].metric(
+    c2[2].metric(
         "Vomma (dVega/dVol)", f"{greeks_data['Vomma (per 1%)']:.4f}", help="Vega sensitivity per 1% change in Volatility"
     )
-    c2[2].metric("Charm (Daily Delta Decay)", f"{greeks_data['Charm (Daily)']:.4f}", help="Delta decay per calendar day")
-    c2[3].metric("Speed (dGamma/dSpot)", f"{greeks_data['Speed']:.6f}", help="Gamma sensitivity to spot price move")
-    c2[4].metric("Zomma (dGamma/dVol)", f"{greeks_data['Zomma (per 1%)']:.4f}", help="Gamma sensitivity to volatility move")
+    c2[3].metric("Charm (Daily Delta Decay)", f"{greeks_data['Charm (Daily)']:.4f}", help="Delta decay per calendar day")
+    c2[4].metric("Speed (dGamma/dSpot)", f"{greeks_data['Speed']:.6f}", help="Gamma sensitivity to spot price move")
+    c2[5].metric("Zomma (dGamma/dVol)", f"{greeks_data['Zomma (per 1%)']:.4f}", help="Gamma sensitivity to volatility move")
 
     st.divider()
 
@@ -314,11 +298,13 @@ def main():
         y_plot_vals = y_range * 100
         current_y_val = sigma_pct
 
+    # Rho has been added here so it flows through all charts & exports
     greeks_to_plot = {
         "Delta": surfaces["Delta"],
-        "Gamma": surfaces["Gamma"],
         "Theta (Daily)": surfaces["Theta (Daily)"],
         "Vega (per 1%)": surfaces["Vega (per 1%)"],
+        "Rho (per 1%)": surfaces["Rho (per 1%)"],
+        "Gamma": surfaces["Gamma"],
         "Vanna (per 1%)": surfaces["Vanna (per 1%)"],
         "Vomma (per 1%)": surfaces["Vomma (per 1%)"],
         "Charm (Daily)": surfaces["Charm (Daily)"],
@@ -434,54 +420,21 @@ def main():
         )
         df_export.index.name = y_label
 
-        st.markdown(df_export.style.format("{:.4f}").to_html(), unsafe_allow_html=True)
+        # Clean interactive native Streamlit dataframe
+        st.dataframe(
+            df_export.style.format("{:.4f}"),
+            use_container_width=True,
+            height=400
+        )
 
         csv_data = df_export.to_csv()
 
         st.download_button(
             label=f"Download {export_greek} Matrix CSV",
             data=csv_data,
-            file_name=f"{export_greek.lower().replace(' ', '_')}_grid.csv",
+            file_name=f"{export_greek.lower().replace(' ', '_').replace('(', '').replace(')', '').replace('%', 'pct')}_grid.csv",
             mime="text/csv",
             use_container_width=True,
-        )
-
-    st.divider()
-    with st.expander("Greek Formulas Reference"):
-        st.markdown(
-            r"""
-            **Base Equations (with continuous dividend yield q):**
-            $d_1 = \frac{\ln(S/K) + (r - q + \frac{1}{2}\sigma^2)T}{\sigma\sqrt{T}}, \quad d_2 = d_1 - \sigma\sqrt{T} \quad \text{where } T = \text{Days} / 365$
-
-            ---
-
-            **1st Order Greeks:**
-            * $\Delta_{Call} = e^{-qT}N(d_1), \quad \Delta_{Put} = e^{-qT}(N(d_1) - 1)$
-            * $\Gamma = \frac{e^{-qT}N'(d_1)}{S \sigma \sqrt{T}}$
-            * $\Theta_{Call} = -\frac{S e^{-qT} N'(d_1) \sigma}{2\sqrt{T}} - r K e^{-rT} N(d_2) + q S e^{-qT} N(d_1)$
-            * $\text{Vega} = S e^{-qT} N'(d_1) \sqrt{T}$
-
-            ---
-
-            **2nd Order Greeks:**
-            * $\text{Vanna} = \frac{\partial \Delta}{\partial \sigma} = -e^{-qT}N'(d_1) \frac{d_2}{\sigma}$
-            * $\text{Vomma} = \frac{\partial \text{Vega}}{\partial \sigma} = \text{Vega} \times \frac{d_1 d_2}{\sigma}$
-
-            ---
-
-            **3rd Order Greeks:**
-            * $\text{Charm} = \frac{\partial \Delta}{\partial T} = q e^{-qT}N(d_1) - e^{-qT}N'(d_1) \left[ \frac{2(r-q)T - d_2 \sigma \sqrt{T}}{2 T \sigma \sqrt{T}} \right]$ (call)
-            * $\text{Speed} = \frac{\partial \Gamma}{\partial S} = -\frac{\Gamma}{S} \left[ \frac{d_1}{\sigma \sqrt{T}} + 1 \right]$
-            * $\text{Zomma} = \frac{\partial \Gamma}{\partial \sigma} = \Gamma \left[ \frac{d_1 d_2 - 1}{\sigma} \right]$
-
-            ---
-
-            **Risk Alert Logic:**
-            * The Vomma alert threshold (|Vomma| ≥ 0.6) is calibrated empirically against a
-              sweep of realistic strikes, expiries, and volatility levels rather than chosen
-              arbitrarily, so it only fires on genuinely unusual parameter combinations
-              (roughly the top 10%) rather than routine ATM, short-dated options.
-            """
         )
 
 
