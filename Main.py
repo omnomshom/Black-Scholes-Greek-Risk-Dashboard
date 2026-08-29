@@ -184,7 +184,7 @@ def render_risk_alerts(spot_price, strike_price, days_to_expiry, greeks_dict):
 
 # App layout
 def main():
-    st.title("Option Greeks Dashboard")
+    st.title("Option Greeks Platform")
 
     if "S" not in st.session_state:
         st.session_state.S = 100.0
