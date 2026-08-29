@@ -44,7 +44,7 @@ Visualization - Plotly
 
 
 # Ouputs
-<img width="1770" height="622" alt="image" src="https://github.com/user-attachments/assets/b81127d8-46aa-44f9-adb2-b8ee6e5d6add" />
+<img width="1756" height="642" alt="image" src="https://github.com/user-attachments/assets/80cad9b3-29f6-4516-8f08-45f871633ab6" />
 
 <img width="1817" height="720" alt="image" src="https://github.com/user-attachments/assets/bc4f7252-650b-42e7-8894-d9e8e8fb9757" />
 
