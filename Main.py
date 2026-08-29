@@ -168,9 +168,9 @@ def render_risk_alerts(spot_price, strike_price, days_to_expiry, greeks_dict):
         alerts.append((
             "info",
             f"**HIGH VOMMA VOLATILITY ACCELERATION:** Vega is highly sensitive to volatility "
-            f"changes (Vomma = {vomma:.4f}), placing this in roughly the top 10% of Vomma values "
-            f"across realistic strikes, expiries, and volatility levels. Implied volatility spikes "
-            f"will non-linearly expand option value more than usual.",
+            f"changes (Vomma = {vomma:.4f}), indicating that Vega will change significantly "
+            f"as implied volatility moves. Implied volatility spikes will non-linearly affect "
+            f"option value more than usual.",
         ))
 
     if not alerts:
@@ -248,14 +248,14 @@ def main():
     st.divider()
 
     # Metrics Dashboard
-    st.markdown("### 1st Order Greeks")
+    st.markdown("### Primary Greeks")
     c1 = st.columns(4)
     c1[0].metric("Delta", f"{greeks_data['Delta']:.4f}")
     c1[1].metric("Theta (Daily)", f"{greeks_data['Theta (Daily)']:.4f}")
     c1[2].metric("Vega (per 1%)", f"{greeks_data['Vega (per 1%)']:.4f}")
     c1[3].metric("Rho (per 1%)", f"{greeks_data['Rho (per 1%)']:.4f}")
 
-    st.markdown("### 2nd Order Greeks")
+    st.markdown("### Second-Order Greeks")
     c2 = st.columns(3)
     c2[0].metric("Gamma (dDelta/dSpot)", f"{greeks_data['Gamma']:.4f}", help="Delta sensitivity to spot price move")
     c2[1].metric(
@@ -265,7 +265,7 @@ def main():
         "Vomma (dVega/dVol)", f"{greeks_data['Vomma (per 1%)']:.4f}", help="Vega sensitivity per 1% change in Volatility"
     )
 
-    st.markdown("### 3rd Order Greeks")
+    st.markdown("### Third-Order Greeks")
     c3 = st.columns(3)
     c3[0].metric("Charm (Daily Delta Decay)", f"{greeks_data['Charm (Daily)']:.4f}", help="Delta decay per calendar day")
     c3[1].metric("Speed (dGamma/dSpot)", f"{greeks_data['Speed']:.6f}", help="Gamma sensitivity to spot price move")
