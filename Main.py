@@ -1,4 +1,4 @@
-# Import all Libraries
+# Imports
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -52,14 +52,6 @@ st.markdown(
     [data-testid="stVerticalBlock"] > div,
     .stAlert {
         border-radius: 0px !important;
-    }
-
-    /* Subtle Header Lines */
-    .sub-header {
-        font-size: 1.1rem;
-        font-weight: 600;
-        margin-top: 1rem;
-        margin-bottom: 0.5rem;
     }
     </style>
     """,
@@ -207,7 +199,7 @@ def main():
     if "sigma_pct" not in st.session_state:
         st.session_state.sigma_pct = 20.0
 
-    # Main Page Input Controls grouped in Expanders or Containers
+    # Main Page Input Controls 
     with st.expander("Parameters & Visualization Settings", expanded=True):
         col1, col2, col3 = st.columns(3)
 
@@ -215,6 +207,7 @@ def main():
             option_type = st.selectbox("Option Type", ["call", "put"])
             spot_price = st.number_input("Underlying Stock Price ($)", min_value=0.01, value=st.session_state.S, step=1.0)
             strike_price = st.number_input("Strike Price ($)", min_value=0.01, value=st.session_state.K, step=1.0)
+            sigma_pct = st.number_input("Volatility (%)", min_value=0.01, value=st.session_state.sigma_pct, step=1.0)
 
         with col2:
             days_to_expiry = st.number_input(
@@ -226,7 +219,6 @@ def main():
             q_pct = st.number_input(
                 "Dividend Yield (%)", min_value=0.0, value=st.session_state.q_pct, step=0.1
             )
-            sigma_pct = st.number_input("Volatility (%)", min_value=0.01, value=st.session_state.sigma_pct, step=1.0)
 
         with col3:
             y_axis_var = st.radio("Y-Axis Variable", ["Time to Expiry (Days)", "Volatility (%)"])
@@ -263,8 +255,8 @@ def main():
     c1[2].metric("Vega (per 1%)", f"{greeks_data['Vega (per 1%)']:.4f}")
     c1[3].metric("Rho (per 1%)", f"{greeks_data['Rho (per 1%)']:.4f}")
 
-    st.markdown("<div class='sub-header'>2nd & 3rd Order Higher Greeks</div>", unsafe_allow_html=True)
-    c2 = st.columns(6)
+    st.markdown("### 2nd Order Greeks")
+    c2 = st.columns(3)
     c2[0].metric("Gamma (dDelta/dSpot)", f"{greeks_data['Gamma']:.4f}", help="Delta sensitivity to spot price move")
     c2[1].metric(
         "Vanna (dDelta/dVol)", f"{greeks_data['Vanna (per 1%)']:.4f}", help="Delta sensitivity per 1% change in Volatility"
@@ -272,9 +264,12 @@ def main():
     c2[2].metric(
         "Vomma (dVega/dVol)", f"{greeks_data['Vomma (per 1%)']:.4f}", help="Vega sensitivity per 1% change in Volatility"
     )
-    c2[3].metric("Charm (Daily Delta Decay)", f"{greeks_data['Charm (Daily)']:.4f}", help="Delta decay per calendar day")
-    c2[4].metric("Speed (dGamma/dSpot)", f"{greeks_data['Speed']:.6f}", help="Gamma sensitivity to spot price move")
-    c2[5].metric("Zomma (dGamma/dVol)", f"{greeks_data['Zomma (per 1%)']:.4f}", help="Gamma sensitivity to volatility move")
+
+    st.markdown("### 3rd Order Greeks")
+    c3 = st.columns(3)
+    c3[0].metric("Charm (Daily Delta Decay)", f"{greeks_data['Charm (Daily)']:.4f}", help="Delta decay per calendar day")
+    c3[1].metric("Speed (dGamma/dSpot)", f"{greeks_data['Speed']:.6f}", help="Gamma sensitivity to spot price move")
+    c3[2].metric("Zomma (dGamma/dVol)", f"{greeks_data['Zomma (per 1%)']:.4f}", help="Gamma sensitivity to volatility move")
 
     st.divider()
 
@@ -298,7 +293,6 @@ def main():
         y_plot_vals = y_range * 100
         current_y_val = sigma_pct
 
-    # Rho has been added here so it flows through all charts & exports
     greeks_to_plot = {
         "Delta": surfaces["Delta"],
         "Theta (Daily)": surfaces["Theta (Daily)"],
