@@ -62,7 +62,7 @@ st.markdown(
 # Calculation engine
 def calculate_greeks(spot_price, strike_price, days_to_expiry, risk_free_rate, dividend_yield, sigma, option_type):
     """Calculate 1st, 2nd, and 3rd Order Option Greeks (with continuous dividend yield) using days to expiry."""
-    # Convert days to years for Black-Scholes pricing
+    # Standardised variables
     time_to_expiry_years = np.maximum(days_to_expiry / 365.0, 1e-5 / 365.0)
     sigma = np.maximum(sigma, 1e-5)
 
@@ -199,7 +199,7 @@ def main():
     if "sigma_pct" not in st.session_state:
         st.session_state.sigma_pct = 20.0
 
-    # Main Page Input Controls 
+    # Main Page Input Controls
     with st.expander("Parameters & Visualization Settings", expanded=True):
         col1, col2, col3 = st.columns(3)
 
@@ -414,7 +414,7 @@ def main():
         )
         df_export.index.name = y_label
 
-        # Clean interactive native Streamlit dataframe
+        # Streamlit dataframe
         st.dataframe(
             df_export.style.format("{:.4f}"),
             use_container_width=True,
